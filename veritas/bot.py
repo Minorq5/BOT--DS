@@ -18,6 +18,7 @@ log = logging.getLogger("veritas.bot")
 
 EXTENSIONS: tuple[str, ...] = (
     "veritas.cogs.setup",
+    "veritas.cogs.verification",
 )
 
 
@@ -107,6 +108,12 @@ class VeritasBot(commands.Bot):
         ids, missing = resolve_role_ids(roles, cached=self.role_id_cache)
         self.missing_roles = missing
         return GuildMap(guild, ids, self.channel_ids)
+
+    def log_event(self, title: str, description: str, *, color: str = "blue",
+                  category: str = "bot") -> None:
+        """Событие бота в #логи (тихо пропускается, если логи ещё не подключены)."""
+        if self.logs is not None:
+            self.logs.bot_event(title, description, color=color, category=category)
 
     def _warn_extra_admins(self, guild: discord.Guild, gm: GuildMap) -> None:
         founder = gm.role(config.FOUNDER)

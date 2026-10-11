@@ -142,6 +142,12 @@ class FakeGuild:
         self.create_forum = AsyncMock(side_effect=self._create_forum)
         self.edit_role_positions = AsyncMock()
         self.members: dict[int, object] = {}
+        self.fetch_member = AsyncMock(side_effect=self._fetch_member)
+
+    async def _fetch_member(self, uid):
+        if uid in self.members:
+            return self.members[uid]
+        raise discord.NotFound(MagicMock(status=404), "unknown member")
 
     # доступ
     def get_role(self, rid):
@@ -233,3 +239,59 @@ class FakeMember:
             if r is not None and r in self.roles:
                 result.add(key)
         return result
+
+
+class FakeBot:
+    """Подделка VeritasBot: БД настоящая (sqlite), Discord — подделки."""
+
+    def __init__(self, db, guild, settings=None):
+        from types import SimpleNamespace
+
+        from veritas.config import Settings
+
+        self.db = db
+        self.guild = guild
+        self.settings = settings or Settings(guild_id=guild.id)
+        self.user = SimpleNamespace(id=999, mention="<@999>")
+        self.channel_ids: dict[str, int] = {}
+        self.events: list[tuple] = []
+        self.cogs: dict[str, object] = {}
+        self.content_enabled = True
+        self.logs = None
+
+    def guild_map(self, guild=None):
+        from veritas.guildmap import GuildMap, resolve_role_ids
+
+        ids, _ = resolve_role_ids([(r.id, r.name) for r in reversed(self.guild.roles)])
+        return GuildMap(self.guild, ids, self.channel_ids)
+
+    def is_home(self, guild):
+        return guild is not None and guild.id == self.guild.id
+
+    @property
+    def home_guild(self):
+        return self.guild
+
+    def log_event(self, title, description, *, color="blue", category="bot"):
+        self.events.append((title, description, color))
+
+    def get_cog(self, name):
+        return self.cogs.get(name)
+
+
+def make_interaction(bot, user, guild=None):
+    inter = MagicMock()
+    inter.client = bot
+    inter.user = user
+    inter.guild = guild or bot.guild
+    inter.response.is_done = MagicMock(return_value=False)
+    inter.response.send_message = AsyncMock()
+    inter.response.defer = AsyncMock()
+    inter.response.send_modal = AsyncMock()
+    inter.followup.send = AsyncMock()
+    return inter
+
+
+def sent_text(inter) -> str:
+    calls = inter.response.send_message.await_args_list + inter.followup.send.await_args_list
+    return "\n".join(str(c.args[0]) if c.args else str(c.kwargs.get("content")) for c in calls)

@@ -81,7 +81,7 @@ class SafeModal(discord.ui.Modal):
 def member_keys(interaction: discord.Interaction) -> set[str]:
     bot: VeritasBot = interaction.client  # type: ignore[assignment]
     gm = bot.guild_map(interaction.guild)
-    if gm is None or not isinstance(interaction.user, discord.Member):
+    if gm is None or not hasattr(interaction.user, "roles"):
         return set()
     return gm.member_keys(interaction.user)
 

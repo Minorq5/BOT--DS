@@ -155,6 +155,14 @@ class Database:
             (key, channel_id, message_id),
         )
 
+    # ───────────── метки ─────────────
+
+    async def is_exiled(self, user_id: int) -> bool:
+        return await self.fetchone("SELECT 1 FROM exiled WHERE user_id = ?", (user_id,)) is not None
+
+    async def is_liar(self, user_id: int) -> bool:
+        return await self.fetchone("SELECT 1 FROM liars WHERE user_id = ?", (user_id,)) is not None
+
     # ───────────── логи ─────────────
 
     async def log_settings(self) -> dict[str, bool]:
