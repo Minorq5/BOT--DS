@@ -9,6 +9,7 @@ import discord
 from discord.ext import commands
 
 from . import __version__, config
+from .audit import AuditCache
 from .config import Settings
 from .db import Database
 from .guildmap import GuildMap, resolve_role_ids
@@ -17,6 +18,7 @@ from .ui import report_error
 log = logging.getLogger("veritas.bot")
 
 EXTENSIONS: tuple[str, ...] = (
+    "veritas.cogs.logs",
     "veritas.cogs.setup",
     "veritas.cogs.verification",
     "veritas.cogs.tickets",
@@ -47,6 +49,7 @@ class VeritasBot(commands.Bot):
         self.role_id_cache: dict[str, int] = {}
         self.missing_roles: list[str] = []
         self.logs = None  # LogService, подключается модулем логов
+        self.audit = AuditCache()
         self.tree.on_error = self._on_tree_error
 
     # ───────────── запуск ─────────────
