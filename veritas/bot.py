@@ -16,7 +16,9 @@ from .ui import report_error
 
 log = logging.getLogger("veritas.bot")
 
-EXTENSIONS: tuple[str, ...] = ()
+EXTENSIONS: tuple[str, ...] = (
+    "veritas.cogs.setup",
+)
 
 
 def make_intents(message_content: bool = True) -> discord.Intents:
