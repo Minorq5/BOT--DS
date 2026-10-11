@@ -19,6 +19,7 @@ log = logging.getLogger("veritas.bot")
 EXTENSIONS: tuple[str, ...] = (
     "veritas.cogs.setup",
     "veritas.cogs.verification",
+    "veritas.cogs.tickets",
 )
 
 

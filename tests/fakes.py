@@ -95,6 +95,15 @@ def make_channel(kind, name, category=None, overwrites=None, topic="", slowmode_
         if "available_tags" in kw:
             ch.available_tags = kw["available_tags"]
 
+    ch.history_messages = []
+
+    def history(limit=None, oldest_first=None, **kw):
+        async def gen():
+            for m in ch.history_messages[:limit]:
+                yield m
+        return gen()
+
+    ch.history = history
     ch.send = AsyncMock(side_effect=send)
     ch.fetch_message = AsyncMock(side_effect=fetch_message)
     ch.edit = AsyncMock(side_effect=edit)

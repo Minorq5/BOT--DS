@@ -109,7 +109,7 @@ def intake_payload(settings: Settings) -> Payload:
 
 def managed_messages() -> list[tuple[str, str, Callable[[Settings], Payload]]]:
     """(ключ сообщения, ключ канала, построитель). Панели добавляют модули бота."""
-    from .cogs import verification  # noqa: F401 — регистрирует панель верификации
+    from .cogs import tickets, verification  # noqa: F401 — регистрируют свои панели
     items: list[tuple[str, str, Callable[[Settings], Payload]]] = [
         ("rules", "rules", rules_payload),
         ("intake", "intake", intake_payload),
