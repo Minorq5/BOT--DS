@@ -42,6 +42,12 @@ ROLE_TITLES = {
     EXILE: "🚫 Отлучённый",
 }
 
+# Машинные имена ролей для API сайта.
+ROLE_SLUGS = {
+    FOUNDER: "founder", HEAD: "head", COUNCIL: "council", ARCH: "archivist", TRUST: "trusted",
+    INIT: "initiate", FOLL: "follower", STRANGER: "stranger", LIAR: "liar", EXILE: "exiled",
+}
+
 ROLE_IDS: dict[str, int] = {
     HEAD: 1558283519849930782,
     COUNCIL: 1558284211637461032,
