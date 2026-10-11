@@ -152,6 +152,17 @@ class FakeGuild:
         self.edit_role_positions = AsyncMock()
         self.members: dict[int, object] = {}
         self.fetch_member = AsyncMock(side_effect=self._fetch_member)
+        self.verification_level = discord.VerificationLevel.low
+        self.edit = AsyncMock(side_effect=self._edit)
+
+    async def _edit(self, reason=None, **kw):
+        if "invites_disabled" in kw:
+            if kw["invites_disabled"]:
+                self.features.append("INVITES_DISABLED")
+            elif "INVITES_DISABLED" in self.features:
+                self.features.remove("INVITES_DISABLED")
+        if "verification_level" in kw:
+            self.verification_level = kw["verification_level"]
 
     async def _fetch_member(self, uid):
         if uid in self.members:

@@ -22,6 +22,7 @@ EXTENSIONS: tuple[str, ...] = (
     "veritas.cogs.setup",
     "veritas.cogs.verification",
     "veritas.cogs.tickets",
+    "veritas.cogs.antiraid",
 )
 
 
