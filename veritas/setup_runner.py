@@ -12,6 +12,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+import aiohttp
 import discord
 
 from . import config
@@ -502,6 +503,8 @@ async def run_setup_cli(settings: Settings, *, dry_run: bool) -> int:
         print("✖ Неверный токен. Developer Portal → Bot → Reset Token.")
     except discord.Forbidden:
         print("✖ Не хватает прав. Для первичной настройки дай боту «Администратор» и подними его роль.")
+    except (aiohttp.ClientError, OSError) as exc:
+        print(f"✖ Нет связи с Discord: {exc}")
     finally:
         await client.close()
         await db.close()

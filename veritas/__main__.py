@@ -12,6 +12,7 @@ import asyncio
 import logging
 import sys
 
+import aiohttp
 import discord
 
 from .config import Settings, load_dotenv
@@ -47,6 +48,9 @@ async def run_bot(settings: Settings) -> int:
             return 1
         except discord.LoginFailure:
             log.error("Неверный токен. Developer Portal → Bot → Reset Token, затем обнови .env.")
+            return 1
+        except (aiohttp.ClientError, OSError) as exc:
+            log.error("Нет связи с Discord: %s", exc)
             return 1
     return 1
 

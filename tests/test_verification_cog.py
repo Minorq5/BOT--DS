@@ -92,6 +92,7 @@ async def test_role_failure_reverts_to_pending(env):
 @pytest.mark.parametrize("keys,allowed", [
     ([C.STRANGER], False), ([C.FOLL], False), ([C.INIT], False),
     ([C.TRUST], True), ([C.ARCH], True), ([C.COUNCIL], True), ([C.FOLL, C.LIAR], False),
+    ([C.TRUST, C.LIAR], False),
 ])
 async def test_decision_buttons_require_trusted(env, keys, allowed):
     bot, guild, cog = env
@@ -185,3 +186,12 @@ async def test_manual_mode_posts_with_buttons(env):
     ids = [getattr(i, "custom_id", None) or i.item.custom_id for i in view.children]
     assert any(i.startswith("veritas:app:accept:") for i in ids)
     assert "Доверенным" in sent_text(inter)
+
+
+async def test_rejoined_liar_can_still_verify(env):
+    bot, guild, cog = env
+    m = FakeMember(guild, 95, [C.STRANGER, C.LIAR])
+    m.created_at = datetime(2020, 1, 1, tzinfo=UTC)
+    inter = make_interaction(bot, m)
+    await cog.start(inter)
+    inter.response.send_modal.assert_awaited()

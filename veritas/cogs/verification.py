@@ -279,7 +279,7 @@ class Verification(commands.Cog):
         keys = self._keys(interaction)
         if config.EXILE in keys:
             raise Denied(texts.VERIFY_EXILED)
-        if member_level(interaction) >= 2 or config.LIAR in keys:
+        if member_level(interaction) >= 2:
             raise Denied(texts.VERIFY_ALREADY)
         decision = await self._decision(interaction.user, time.time())
         if not decision.allowed:

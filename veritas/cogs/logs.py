@@ -166,6 +166,8 @@ class Logs(commands.Cog):
         if rec is not None:
             return
         actor, reason = await self._actor(guild, "kick", user.id)
+        if user.id in self._recent_bans or self.bot.audit.find("ban", user.id, within=15) is not None:
+            return  # событие бана пришло позже выхода — его залогирует on_member_ban
         if actor is not None:
             self._send("members", fmt.moderation("👢 Кик", user.mention, user.id, actor, reason))
             return

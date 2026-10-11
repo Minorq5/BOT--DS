@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -74,6 +75,35 @@ class SetupCog(commands.Cog):
     @panel.autocomplete("which")
     async def _panel_autocomplete(self, interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name=k, value=k) for k, _, _ in managed_messages() if current in k][:25]
+
+
+    @app_commands.command(name="status", description="Состояние бота")
+    @app_commands.guild_only()
+    @min_level(5, "Состояние бота видит Совет.")
+    async def status(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(embed=await status_embed(self.bot), ephemeral=True)
+
+
+async def status_embed(bot: VeritasBot) -> discord.Embed:
+    from ..embeds import make_embed
+    from ..logic.verification import human_duration
+
+    uptime = human_duration(time.time() - bot.started_at)
+    latency = bot.latency * 1000 if bot.latency == bot.latency else 0  # NaN до подключения
+    antiraid = bot.get_cog("AntiRaid")
+    lockdown = antiraid.status_text() if antiraid else "модуль защиты не загружен"
+    tickets = await bot.db.fetchval("SELECT COUNT(*) FROM tickets WHERE status = 'open'", (), 0)
+    pending = await bot.db.fetchval("SELECT COUNT(*) FROM applications WHERE status = 'pending'", (), 0)
+    logs = bot.logs
+    queue = f"{logs.queue.qsize()} в очереди, потеряно {logs.dropped}" if logs else "не подключены"
+    api = "выключен" if not bot.settings.api_token else f"{bot.settings.api_host}:{bot.settings.api_port}"
+    return make_embed("📟 Состояние Veritas", None, color="blue", fields=[
+        ("Версия", bot.version, True), ("Аптайм", uptime, True), ("Задержка", f"{latency:.0f} мс", True),
+        ("Локдаун", lockdown, False),
+        ("Открытых тикетов", str(tickets), True), ("Анкет ждут решения", str(pending), True),
+        ("Message Content", "включён" if bot.content_enabled else "выключен", True),
+        ("Логи", queue, True), ("API", api, True),
+        ("Не найдены роли", ", ".join(bot.missing_roles) or "—", False)])
 
 
 async def setup(bot: VeritasBot) -> None:
