@@ -51,15 +51,35 @@ class RateLimiter:
         return True
 
 
-def create_app(bridge: Bridge, token: str, allowed_domains: Iterable[str], *,
+def create_app(bridge: Bridge | None, token: str | None, allowed_domains: Iterable[str] = (), *,
                rate_limit: int = 60, rate_window_s: float = 60.0,
-               clock: Callable[[], float] = time.monotonic) -> FastAPI:
-    if not token or len(token) < 16:
-        raise ValueError("API_TOKEN должен быть задан и не короче 16 символов")
+               clock: Callable[[], float] = time.monotonic,
+               status: Callable[[], dict] | None = None) -> FastAPI:
+    """Без токена (``token=None``) — только проверка здоровья: нужна хостингам вроде Render,
+    которые держат сервис живым, пока на порт приходят запросы."""
+    if token is not None and len(token) < 16:
+        raise ValueError("API_TOKEN должен быть не короче 16 символов")
+    app = FastAPI(title="Veritas API", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
+
+    def health_body() -> dict:
+        body = {"ok": True, "version": __version__}
+        if status is not None:
+            body.update(status())
+        return body
+
+    @app.get("/")
+    @app.get("/health")
+    @app.head("/")
+    @app.head("/health")
+    async def root_health() -> dict:
+        return health_body()
+
+    if token is None or bridge is None:
+        return app
+
     expected = token.encode("utf-8")
     domains = tuple(allowed_domains)
     limiter = RateLimiter(rate_limit, rate_window_s, clock)
-    app = FastAPI(title="Veritas API", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
 
     async def guard(request: Request) -> None:
         client = request.client.host if request.client else "unknown"
@@ -73,7 +93,7 @@ def create_app(bridge: Bridge, token: str, allowed_domains: Iterable[str], *,
 
     @app.get("/api/v1/health")
     async def health() -> dict:
-        return {"ok": True, "version": __version__}
+        return health_body()
 
     @app.get("/api/v1/clearance/{discord_id}", response_model=ClearanceResponse, dependencies=[Depends(guard)])
     async def clearance(discord_id: int) -> ClearanceResponse:

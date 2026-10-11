@@ -410,6 +410,12 @@ class Settings:
     restore_on_rejoin: bool = False
     head_can_appoint_council: bool = False
     site_url: str = ""
+    # Хостинг вида Render: веб-порт нужен всегда, если платформа передала PORT.
+    web_enabled: bool = False
+    public_url: str = ""
+    keepalive_minutes: int = 0
+    discord_backup: bool = False
+    backup_minutes: int = 10
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> Settings:
@@ -421,12 +427,15 @@ class Settings:
             d.strip().lower() for d in (e.get("ALLOWED_SITE_DOMAINS") or "").split(",") if d.strip()
         )
         gid = (e.get("GUILD_ID") or "0").strip()
+        platform_port = (e.get("PORT") or "").strip()
+        public_url = (e.get("PUBLIC_URL") or e.get("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+        keepalive = (e.get("KEEPALIVE_MINUTES") or "").strip()
         return cls(
             discord_token=(e.get("DISCORD_TOKEN") or "").strip(),
             guild_id=int(gid) if gid.isdigit() else 0,
             api_token=(e.get("API_TOKEN") or "").strip(),
-            api_host=(e.get("API_HOST") or "127.0.0.1").strip(),
-            api_port=int((e.get("API_PORT") or "8080").strip()),
+            api_host=(e.get("API_HOST") or ("0.0.0.0" if platform_port else "127.0.0.1")).strip(),
+            api_port=int((e.get("API_PORT") or platform_port or "8080").strip()),
             allowed_site_domains=domains,
             verify_mode=mode,
             log_level=(e.get("LOG_LEVEL") or "INFO").strip().upper(),
@@ -434,6 +443,11 @@ class Settings:
             restore_on_rejoin=_bool(e.get("RESTORE_ON_REJOIN")),
             head_can_appoint_council=_bool(e.get("HEAD_CAN_APPOINT_COUNCIL")),
             site_url=(e.get("SITE_URL") or "").strip(),
+            web_enabled=bool(platform_port) or _bool(e.get("WEB_ENABLED")),
+            public_url=public_url,
+            keepalive_minutes=int(keepalive) if keepalive.isdigit() else (10 if public_url else 0),
+            discord_backup=_bool(e.get("DB_BACKUP_TO_DISCORD")),
+            backup_minutes=max(1, int((e.get("DB_BACKUP_MINUTES") or "10").strip())),
         )
 
     def __repr__(self) -> str:  # никогда не печатаем секреты

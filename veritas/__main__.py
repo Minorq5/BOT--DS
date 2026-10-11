@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import signal
 import sys
 
 import aiohttp
@@ -36,6 +37,7 @@ async def run_bot(settings: Settings) -> int:
         bot = VeritasBot(settings, message_content=message_content)
         try:
             async with bot:
+                _install_stop_signals(bot)
                 await bot.start(settings.discord_token)
             return 0
         except discord.PrivilegedIntentsRequired:
@@ -53,6 +55,16 @@ async def run_bot(settings: Settings) -> int:
             log.error("Нет связи с Discord: %s", exc)
             return 1
     return 1
+
+
+def _install_stop_signals(bot) -> None:
+    """SIGTERM (так хостинги останавливают сервис) → аккуратное закрытие с сохранением базы."""
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, lambda: asyncio.ensure_future(bot.close()))
+        except (NotImplementedError, RuntimeError):
+            pass  # Windows: остаётся стандартный Ctrl+C
 
 
 async def run_setup(settings: Settings, dry_run: bool) -> int:

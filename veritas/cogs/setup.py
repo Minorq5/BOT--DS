@@ -76,12 +76,25 @@ class SetupCog(commands.Cog):
     async def _panel_autocomplete(self, interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name=k, value=k) for k, _, _ in managed_messages() if current in k][:25]
 
-
     @app_commands.command(name="status", description="Состояние бота")
     @app_commands.guild_only()
     @min_level(5, "Состояние бота видит Совет.")
     async def status(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(embed=await status_embed(self.bot), ephemeral=True)
+
+
+    @app_commands.command(name="backup", description="Сохранить копию базы в Discord прямо сейчас")
+    @app_commands.guild_only()
+    @min_level(5, "Это может Совет.")
+    async def backup_now(self, interaction: discord.Interaction) -> None:
+        if self.bot.cloud_backup is None:
+            raise Denied("Копия в Discord выключена (DB_BACKUP_TO_DISCORD=false).")
+        if not self.bot.cloud_backup.enabled:
+            raise Denied("Копия выключена: при старте не удалось скачать прежнюю. Перезапусти сервис.")
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        saved = await self.bot.cloud_backup.save()
+        await interaction.followup.send("Копия базы сохранена." if saved else "Изменений нет — копия актуальна.",
+                                        ephemeral=True)
 
 
 async def status_embed(bot: VeritasBot) -> discord.Embed:
@@ -103,7 +116,17 @@ async def status_embed(bot: VeritasBot) -> discord.Embed:
         ("Открытых тикетов", str(tickets), True), ("Анкет ждут решения", str(pending), True),
         ("Message Content", "включён" if bot.content_enabled else "выключен", True),
         ("Логи", queue, True), ("API", api, True),
+        ("Копия базы в Discord", _backup_text(bot), True),
         ("Не найдены роли", ", ".join(bot.missing_roles) or "—", False)])
+
+
+def _backup_text(bot: VeritasBot) -> str:
+    b = getattr(bot, "cloud_backup", None)
+    if b is None:
+        return "выключена"
+    if not b.enabled:
+        return "⚠️ выключена из-за ошибки восстановления"
+    return f"последняя <t:{int(b.last_saved_at)}:R>" if b.last_saved_at else "ещё не сохранялась"
 
 
 async def setup(bot: VeritasBot) -> None:

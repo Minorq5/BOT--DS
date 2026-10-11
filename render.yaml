@@ -1,0 +1,36 @@
+# Render Blueprint: Dashboard → New → Blueprint → выбери этот репозиторий.
+# Секреты (DISCORD_TOKEN, GUILD_ID, API_TOKEN) Render спросит при создании — в git их нет.
+services:
+  - type: web               # web, а не worker: бесплатный тариф есть только у web-сервисов
+    name: veritas-bot
+    runtime: python
+    plan: free              # starter ($7/мес) — не засыпает и без само-пинга
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m veritas
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      # Файлы бесплатного сервиса стираются при каждом деплое/перезапуске —
+      # база хранится копией в скрытом канале Discord.
+      - key: DB_BACKUP_TO_DISCORD
+        value: "true"
+      - key: DB_BACKUP_MINUTES
+        value: "5"
+      # Само-пинг своего адреса RENDER_EXTERNAL_URL (Render задаёт его сам).
+      - key: KEEPALIVE_MINUTES
+        value: "10"
+      - key: VERIFY_MODE
+        value: manual
+      - key: LOG_LEVEL
+        value: INFO
+      # Мост с сайтом (необязательно): длинный случайный токен и домены сайта.
+      - key: API_TOKEN
+        sync: false
+      - key: ALLOWED_SITE_DOMAINS
+        sync: false

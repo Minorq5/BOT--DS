@@ -115,17 +115,19 @@ class Archive(commands.Cog):
 
     async def cog_load(self) -> None:
         s = self.bot.settings
-        if not s.api_token:
+        token: str | None = s.api_token or None
+        if token is not None and len(token) < 16:
+            log.error("API_TOKEN короче 16 символов — API сайта выключен")
+            token = None
+        if token is None and not s.web_enabled:
             log.info("API_TOKEN не задан — HTTP API выключен")
             return
-        try:
-            app = create_app(self.bridge, s.api_token, s.allowed_site_domains)
-        except ValueError as exc:
-            log.error("API не запущен: %s", exc)
-            return
+        app = create_app(self.bridge if token else None, token, s.allowed_site_domains,
+                         status=self.bot.health_status)
         self._server = make_server(app, s.api_host, s.api_port)
         self._server_task = asyncio.create_task(self._serve(), name="veritas-api")
-        log.info("API слушает %s:%s", s.api_host, s.api_port)
+        log.info("HTTP слушает %s:%s (%s)", s.api_host, s.api_port,
+                 "API сайта + проверка здоровья" if token else "только проверка здоровья")
 
     async def _serve(self) -> None:
         try:
