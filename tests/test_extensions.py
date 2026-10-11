@@ -31,7 +31,7 @@ async def test_all_extensions_load_and_commands_valid(tmp_path):
         assert NAME_RE.match(c.name) and c.name == c.name.lower(), c.name
         assert 1 <= len(c.description) <= 100, c.name
     expected = {"setup", "panel", "status", "ticket", "logs", "lockdown", "raid", "rank", "liar", "exile",
-                "restore", "timeout", "untimeout", "warn", "warns", "archive"}
+                "restore", "timeout", "untimeout", "warn", "warns", "archive", "mainez", "backup"}
     assert expected <= set(names)
     assert {"Verification", "Tickets", "Logs", "AntiRaid", "Ranks", "Archive", "SetupCog"} <= set(bot.cogs)
     assert bot.logs is not None

@@ -193,3 +193,80 @@ async def test_only_author_or_handler_can_close(env):
     own = make_interaction(bot, author)
     own.channel = channel
     assert (await cog.require_closer(own))["user_id"] == 15
+
+
+# ───── приём материалов
+
+def test_materials_handlers_only_head_and_founder():
+    from veritas.logic.tickets import TICKET_TYPES, is_handler
+
+    assert handler_roles("materials") == [C.HEAD, C.FOUNDER]
+    assert is_handler({C.HEAD}, "materials") and is_handler({C.FOUNDER}, "materials")
+    assert not is_handler({C.COUNCIL}, "materials") and not is_handler({C.ARCH}, "materials")
+    assert is_handler({C.COUNCIL}, "complaint") and not is_handler({C.TRUST}, "complaint")
+    assert is_handler({C.TRUST}, "access") and not is_handler({C.TRUST, C.LIAR}, "access")
+    assert not TICKET_TYPES["materials"].on_panel  # не на панели #заявки
+
+
+def test_materials_not_on_requests_panel():
+    from veritas.cogs.tickets import TicketPanelView
+
+    ids = [i.custom_id for i in TicketPanelView().children]
+    assert "veritas:ticket:open:materials" not in ids and len(ids) == 3
+
+
+async def test_open_materials_ticket_pings_head_and_founder(env):
+    bot, guild, cog, cat, logs = env
+    author = FakeMember(guild, 20, [C.INIT], name="Вейл")
+    await cog.open_ticket(make_interaction(bot, author), "materials")
+    name = guild.create_text_channel.await_args.args[0]
+    assert name == "материал-0001-вейл"
+    ow = guild.create_text_channel.await_args.kwargs["overwrites"]
+    assert ow[guild.role_by_key(C.HEAD)].view_channel is True
+    assert ow[guild.role_by_key(C.FOUNDER)].view_channel is True
+    assert guild.role_by_key(C.COUNCIL) not in ow and guild.role_by_key("TRUST") not in ow
+    channel = guild._channels[-1]
+    first, second = channel.send.await_args_list
+    intro = first.args[0]
+    assert guild.role_by_key(C.HEAD).mention in intro and guild.role_by_key(C.FOUNDER).mention in intro
+    assert first.kwargs["allowed_mentions"].roles is True
+    assert "Предоставьте всю информацию" in second.args[0]
+
+
+async def test_materials_pings_owner_when_no_founder_role(env):
+    bot, guild, cog, cat, logs = env
+    guild.roles.remove(guild.role_by_key(C.FOUNDER))
+    await cog.open_ticket(make_interaction(bot, FakeMember(guild, 21, [C.INIT])), "materials")
+    intro = guild._channels[-1].send.await_args_list[0].args[0]
+    assert f"<@{guild.owner_id}>" in intro
+
+
+async def test_council_cannot_handle_materials(env):
+    bot, guild, cog, cat, logs = env
+    await cog.open_ticket(make_interaction(bot, FakeMember(guild, 22, [C.INIT])), "materials")
+    channel = guild._channels[-1]
+    council = make_interaction(bot, FakeMember(guild, 23, [C.COUNCIL]))
+    council.channel = channel
+    with pytest.raises(Denied):
+        await cog.require_handler(council)
+    head = make_interaction(bot, FakeMember(guild, 24, [C.HEAD]))
+    head.channel = channel
+    assert (await cog.require_handler(head))["type"] == "materials"
+
+
+async def test_mainez_turns_old_intake_message_into_panel(env):
+    bot, guild, cog, cat, logs = env
+    intake = make_channel("text", "📥┃приём-материалов")
+    guild._channels.append(intake)
+    old = await intake.send("старый шаблон")
+    await bot.db.save_managed_message("intake", intake.id, old.id)
+    inter = make_interaction(bot, FakeMember(guild, 30, [C.HEAD]))
+    inter.channel = intake
+    await cog.mainez.callback(cog, inter)
+    old.edit.assert_awaited()
+    kwargs = old.edit.await_args.kwargs
+    assert kwargs["embeds"][0].title == "📥 Приём материалов"
+    assert "награда" in kwargs["embeds"][0].description
+    button = kwargs["view"].children[0]
+    assert button.custom_id == "veritas:ticket:open:materials"
+    assert len(intake.messages) == 1  # не дублирует

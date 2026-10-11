@@ -40,10 +40,10 @@ EXPECTED = {
     "Незнакомец":    "R R — — — — — — — — — — — — — —",
     "Последователь": "R — R W W R — — — — — — — — — —",
     "Лжец":          "R — R W W R — — — — — — — — — —",
-    "Посвящённый":   "R — R W W R R W R — — — — — — —",
-    "Доверенный":    "R R R W W R R W R R W R — — — —",
-    "Архивариус":    "R — R W W R W W W R W W — — — —",
-    "Член Совета":   "R R R W W R R W W R W W W W R W",
+    "Посвящённый":   "R — R W W R R R R — — — — — — —",
+    "Доверенный":    "R R R W W R R R R R W R — — — —",
+    "Архивариус":    "R — R W W R W R W R W W — — — —",
+    "Член Совета":   "R R R W W R R R W R W W W W R W",
     "Глава":         "W W W W W W W W W R W W W W R W",
     "Отлучённый":    "— — — — — — — — — — — — — — — W",
 }
@@ -119,8 +119,16 @@ def test_founder_admin_sees_everything():
 
 
 def test_slowmode_preserved():
-    assert C.channel_spec("intake").slow == 60
     assert C.channel_spec("appeals").slow == 600
+
+
+def test_intake_is_panel_only():
+    """#приём-материалов — только кнопка: писать там могут лишь Основатель и Глава."""
+    intake = C.channel_spec("intake")
+    for keys in ({C.INIT}, {C.TRUST}, {C.ARCH}, {C.COUNCIL}):
+        assert access(keys, intake) == READ
+        assert not can(keys, intake, "create_public_threads")
+    assert access({C.HEAD}, intake) == WRITE
 
 
 def test_category_overwrites():

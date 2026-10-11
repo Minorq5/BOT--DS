@@ -207,8 +207,9 @@ STRUCTURE: tuple[CategorySpec, ...] = (
     CategorySpec("cat_archive", "🗂 АРХИВ", L3, (
         ch("archive", "text", "📚┃архив", "Лента обновлений архива на сайте.",
            L3, (FOUNDER, HEAD, ARCH), threads=False),
-        ch("intake", "text", "📥┃приём-материалов", "Сдавай информацию по шаблону из закрепа.",
-           L3, "all", slow=60),
+        ch("intake", "text", "📥┃приём-материалов",
+           "Отправка материалов: нажми кнопку — откроется приватный тикет. Проверяют Глава Совета и Основатель.",
+           L3, TOP, reactions=False, threads=False),
         ch("investigations", "forum", "🔎┃расследования", "Одна публикация = одно дело.",
            L3, (FOUNDER, HEAD, COUNCIL, ARCH)),
     )),
@@ -313,7 +314,7 @@ class SpamConfig:
     offense_window_s: int = 24 * 3600
     ladder_timeouts_s: tuple[int, ...] = (0, 10 * 60, 60 * 60)  # предупреждение → 10 мин → 1 час
     link_whitelist: tuple[str, ...] = ("cdn.discordapp.com", "media.discordapp.net")
-    link_exempt_channels: tuple[str, ...] = ("intake",)
+    link_exempt_channels: tuple[str, ...] = ()   # тикеты (в т.ч. материалы) освобождены всегда
 
 
 @dataclass(frozen=True)

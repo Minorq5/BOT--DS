@@ -13,7 +13,6 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from .. import config
-from ..clearance import clearance_level
 from ..content import texts
 from ..embeds import make_embed
 from ..logic.tickets import (
@@ -26,11 +25,12 @@ from ..logic.tickets import (
     check_limits,
     handler_roles,
     inactivity_action,
+    is_handler,
     slugify,
 )
 from ..permissions import ticket_overwrites
-from ..setup_runner import register_panel, to_discord_overwrites
-from ..ui import Denied, SafeModal, SafeView
+from ..setup_runner import register_panel, to_discord_overwrites, upsert_message
+from ..ui import Denied, SafeModal, SafeView, top_only
 
 if TYPE_CHECKING:
     from ..bot import VeritasBot
@@ -108,6 +108,8 @@ class TicketPanelView(SafeView):
     def __init__(self):
         super().__init__(timeout=None)
         for t in TICKET_TYPES.values():
+            if not t.on_panel:
+                continue
             button = discord.ui.Button(label=t.label, emoji=t.emoji, style=discord.ButtonStyle.secondary,
                                        custom_id=f"veritas:ticket:open:{t.key}")
             button.callback = self._make_callback(t.key)
@@ -127,6 +129,29 @@ def tickets_panel(settings) -> dict:
 
 
 register_panel("tickets_panel", "requests", tickets_panel)
+
+
+# Ключ отслеживаемого сообщения: тот же, что у старого шаблона приёма, — /mainez в
+# #приём-материалов превратит прежний закреп в панель, а не добавит второй.
+MATERIALS_KEY = "intake"
+
+
+class MaterialsPanelView(SafeView):
+    """Кнопка в #приём-материалов: открывает тикет «Отправка материала»."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Отправить материал", emoji="📥", style=discord.ButtonStyle.success,
+                       custom_id="veritas:ticket:open:materials")
+    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.client.get_cog("Tickets").open_ticket(interaction, "materials")
+
+
+def materials_panel(settings) -> dict:
+    return {"content": None,
+            "embeds": [make_embed(texts.MATERIALS_PANEL_TITLE, texts.MATERIALS_PANEL, color="gold")],
+            "view": MaterialsPanelView()}
 
 
 class TicketControlView(SafeView):
@@ -182,6 +207,7 @@ class Tickets(commands.Cog):
 
     async def cog_load(self) -> None:
         self.bot.add_view(TicketPanelView())
+        self.bot.add_view(MaterialsPanelView())
         self.bot.add_view(TicketControlView())
         self.inactivity_loop.start()
 
@@ -195,8 +221,14 @@ class Tickets(commands.Cog):
         return gm.member_keys(user) if gm else set()
 
     def is_handler(self, guild, user, ticket_type: str) -> bool:
-        keys = self._keys(guild, user)
-        return clearance_level(keys) >= TICKET_TYPES[ticket_type].handler_level
+        return is_handler(self._keys(guild, user), ticket_type)
+
+    def handler_mentions(self, guild, gm, ticket_type: str) -> str:
+        keys = handler_roles(ticket_type)
+        parts = [r.mention for r in gm.roles(keys)] if gm else []
+        if config.FOUNDER in keys and (gm is None or gm.role(config.FOUNDER) is None) and guild.owner_id:
+            parts.append(f"<@{guild.owner_id}>")  # роли Основателя нет — тегаем владельца сервера
+        return ", ".join(parts) or "Совет"
 
     async def _ticket_here(self, channel) -> object:
         ticket = await self.store.by_channel(getattr(channel, "id", 0))
@@ -240,7 +272,8 @@ class Tickets(commands.Cog):
         overwrites = to_discord_overwrites(ticket_overwrites(handlers), guild, gm, extra={"@author": member})
         try:
             channel = await guild.create_text_channel(
-                channel_name(number, member.display_name), category=category, overwrites=overwrites,
+                channel_name(number, member.display_name, TICKET_TYPES[ticket_type].prefix),
+                category=category, overwrites=overwrites,
                 topic=f"Тикет №{number:04d} · {TICKET_TYPES[ticket_type].label} · автор {member.id}",
                 reason=f"Veritas: тикет №{number}")
         except Exception:
@@ -248,11 +281,18 @@ class Tickets(commands.Cog):
             raise
         await self.store.set_channel(ticket_id, channel.id)
         ticket = await self.store.by_channel(channel.id)
-        handler_text = ", ".join(r.mention for r in gm.roles(handlers)) or "Совет"
-        await channel.send(texts.TICKET_WELCOME.format(author=member.mention, handlers=handler_text),
-                           embed=ticket_embed(ticket, member.mention, handler_text),
+        handler_text = self.handler_mentions(guild, gm, ticket_type)
+        t = TICKET_TYPES[ticket_type]
+        if t.ping_handlers:
+            intro = texts.MATERIALS_WELCOME.format(handlers=handler_text, author=member.mention)
+        else:
+            intro = texts.TICKET_WELCOME.format(author=member.mention, handlers=handler_text)
+        await channel.send(intro, embed=ticket_embed(ticket, member.mention, handler_text),
                            view=TicketControlView(),
-                           allowed_mentions=discord.AllowedMentions(users=True, roles=False))
+                           allowed_mentions=discord.AllowedMentions(users=True, roles=t.ping_handlers))
+        if ticket_type == "materials":
+            await channel.send(texts.MATERIALS_REQUEST.format(author=member.mention),
+                               allowed_mentions=discord.AllowedMentions(users=True))
         self.bot.log_event("🎫 Тикет открыт",
                            f"№{number:04d} · {TICKET_TYPES[ticket_type].label} · {member.mention} · {channel.mention}",
                            color="green")
@@ -266,7 +306,7 @@ class Tickets(commands.Cog):
             raise Denied("Ты уже ведёшь этот тикет.")
         await self.store.claim(ticket["id"], interaction.user.id)
         gm = self.bot.guild_map(interaction.guild)
-        handler_text = ", ".join(r.mention for r in gm.roles(handler_roles(ticket["type"]))) or "Совет"
+        handler_text = self.handler_mentions(interaction.guild, gm, ticket["type"])
         try:
             await interaction.message.edit(embed=ticket_embed(ticket, f"<@{ticket['user_id']}>", handler_text,
                                                               claimed_by=interaction.user.id))
@@ -407,6 +447,19 @@ class Tickets(commands.Cog):
 
     # ── команды
 
+    @app_commands.command(name="mainez", description="Опубликовать панель приёма материалов в этом канале")
+    @app_commands.guild_only()
+    @top_only()
+    async def mainez(self, interaction: discord.Interaction) -> None:
+        if not isinstance(interaction.channel, discord.TextChannel):
+            raise Denied("Панель можно опубликовать только в текстовом канале.")
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        line = await upsert_message(self.bot.db, interaction.guild, MATERIALS_KEY, interaction.channel,
+                                    materials_panel(self.bot.settings), dry_run=False)
+        self.bot.log_event("📥 Панель материалов", f"{interaction.user.mention} опубликовал панель в "
+                                                  f"{interaction.channel.mention}.")
+        await interaction.followup.send(f"Готово.{line.replace('    ', ' ')}", ephemeral=True)
+
     @ticket_group.command(name="add", description="Добавить участника в тикет")
     async def add(self, interaction: discord.Interaction, user: discord.Member) -> None:
         ticket = await self.require_handler(interaction)
@@ -436,7 +489,7 @@ class Tickets(commands.Cog):
     @ticket_group.command(name="rename", description="Переименовать тикет")
     async def rename(self, interaction: discord.Interaction, name: str) -> None:
         ticket = await self.require_handler(interaction)
-        new = f"тикет-{ticket['number']:04d}-{slugify(name, 40)}"
+        new = f"{TICKET_TYPES[ticket['type']].prefix}-{ticket['number']:04d}-{slugify(name, 40)}"
         await interaction.channel.edit(name=new, reason="Veritas: переименование тикета")
         await interaction.response.send_message(f"✏️ Тикет переименован: `{new}`", ephemeral=True)
 

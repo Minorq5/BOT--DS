@@ -411,7 +411,10 @@ class AntiRaid(commands.Cog):
                                   text_available=text_ok)
         if text_ok:
             channel_id = getattr(message.channel, "parent_id", None) or message.channel.id
-            allow_links = gm.channel_key(channel_id) in self.spam_cfg.link_exempt_channels
+            parent = message.guild.get_channel(channel_id)
+            tickets_cat = self.bot.channel_ids.get("cat_tickets")
+            in_ticket = tickets_cat is not None and getattr(parent, "category_id", None) == tickets_cat
+            allow_links = in_ticket or gm.channel_key(channel_id) in self.spam_cfg.link_exempt_channels
             whitelist = tuple(self.spam_cfg.link_whitelist) + tuple(self.bot.settings.allowed_site_domains)
             violation = link_violation(message.content, whitelist, allow_links=allow_links)
             if violation:

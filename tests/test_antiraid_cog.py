@@ -172,3 +172,19 @@ async def test_raid_config_persists_and_validates(env):
         await cog.set_param("raid.lockdown_action", "ban")
     with pytest.raises(Denied):
         await cog.set_param("nope", "1")
+
+
+async def test_links_allowed_inside_ticket_channels(env):
+    bot, guild, cog, clock, council = env
+    cat = make_channel("category", "🎫 ТИКЕТЫ")
+    ticket = make_channel("text", "материал-0001-x", category=cat)
+    ticket.parent_id = None
+    guild._channels += [cat, ticket]
+    bot.channel_ids["cat_tickets"] = cat.id
+    foll = FakeMember(guild, 3, [C.FOLL])
+    m = MagicMock()
+    m.author, m.guild, m.channel, m.content = foll, guild, ticket, "доказательство https://imgur.com/a/x"
+    m.raw_mentions, m.raw_role_mentions = [], []
+    m.delete = AsyncMock()
+    await cog.on_message(m)
+    m.delete.assert_not_called()

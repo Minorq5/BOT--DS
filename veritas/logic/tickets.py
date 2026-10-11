@@ -19,6 +19,10 @@ class TicketType:
     emoji: str
     handler_level: int
     hint: str
+    handlers: tuple[str, ...] = ()   # явный список обработчиков (иначе — все с нужным допуском)
+    prefix: str = "тикет"            # начало названия канала
+    on_panel: bool = True            # кнопка на панели #заявки
+    ping_handlers: bool = False      # тегнуть обработчиков при открытии
 
 
 TICKET_TYPES: dict[str, TicketType] = {
@@ -30,12 +34,19 @@ TICKET_TYPES: dict[str, TicketType] = {
                             "Совет разберёт жалобу и ответит здесь."),
     "question": TicketType("question", "Вопрос Совету", "❓", 5,
                            "Задай вопрос. Ответит Член Совета."),
+    "materials": TicketType("materials", "Отправка материала", "📥", 5,
+                            "Проверь материал, при необходимости задай уточняющие вопросы, назначь награду "
+                            "и закрой тикет. Подтверждённое — в архив через `/archive announce`.",
+                            handlers=(HEAD, FOUNDER), prefix="материал", on_panel=False, ping_handlers=True),
 }
 
 
 def handler_roles(ticket_type: str) -> list[str]:
-    """Роли-обработчики: все с допуском не ниже требуемого (Лжец/Отлучённый — никогда)."""
-    level = TICKET_TYPES[ticket_type].handler_level
+    """Роли-обработчики: явный список типа или все с допуском не ниже требуемого."""
+    t = TICKET_TYPES[ticket_type]
+    if t.handlers:
+        return list(t.handlers)
+    level = t.handler_level
     order = ("TRUST", "ARCH", COUNCIL, HEAD, FOUNDER)
     return [k for k in order if ROLE_CLEARANCE.get(k, 0) >= level]
 
@@ -62,8 +73,17 @@ def slugify(name: str, limit: int = 20) -> str:
     return s or "user"
 
 
-def channel_name(number: int, nickname: str) -> str:
-    return f"тикет-{number:04d}-{slugify(nickname)}"
+def channel_name(number: int, nickname: str, prefix: str = "тикет") -> str:
+    return f"{prefix}-{number:04d}-{slugify(nickname)}"
+
+
+def is_handler(role_keys: Iterable[str], ticket_type: str) -> bool:
+    """Обработчик = есть роль из списка обработчиков и допуск не ниже требуемого (Лжец отсекается)."""
+    from ..clearance import clearance_level
+
+    keys = set(role_keys)
+    t = TICKET_TYPES[ticket_type]
+    return bool(keys & set(handler_roles(ticket_type))) and clearance_level(keys) >= t.handler_level
 
 
 def inactivity_action(last_activity: float, warned: bool, now: float, cfg: TicketConfig) -> str | None:

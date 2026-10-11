@@ -41,10 +41,10 @@ async def test_run_creates_everything_then_is_idempotent(db, monkeypatch):
     news = g.get_channel(stored["news"])
     assert news.is_news()
     rules_msg = await db.managed_message("rules")
-    assert rules_msg is not None and await db.managed_message("intake") is not None
-    intake = g.get_channel(stored["intake"])
-    sent = intake.messages[(await db.managed_message("intake"))["message_id"]]
-    assert sent.pinned and "Как сдать материал" in sent.content
+    assert rules_msg is not None
+    assert await db.managed_message("intake") is None  # панель материалов публикует /mainez
+    rules = g.get_channel(stored["rules"])
+    assert rules.messages[rules_msg["message_id"]].pinned
 
     # повторный запуск: ничего не создаётся, сообщения редактируются, а не дублируются
     calls_before = (g.create_category.await_count, g.create_text_channel.await_count)
@@ -52,7 +52,7 @@ async def test_run_creates_everything_then_is_idempotent(db, monkeypatch):
     assert report2.errors == []
     assert (g.create_category.await_count, g.create_text_channel.await_count) == calls_before
     assert g.create_role.await_count == 1
-    assert len(intake.messages) == 1
-    assert "↻ текст «intake» обновлён" in report2.text()
+    assert len(rules.messages) == 1
+    assert "↻ текст «rules» обновлён" in report2.text()
     assert "↻ 📜┃правила: права" not in report2.text()
     assert await db.managed_channels() == stored

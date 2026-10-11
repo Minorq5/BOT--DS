@@ -104,16 +104,11 @@ def rules_payload(settings: Settings) -> Payload:
     return {"content": None, "embeds": embeds}
 
 
-def intake_payload(settings: Settings) -> Payload:
-    return {"content": texts.INTAKE_TEMPLATE, "embeds": []}
-
-
 def managed_messages() -> list[tuple[str, str, Callable[[Settings], Payload]]]:
     """(ключ сообщения, ключ канала, построитель). Панели добавляют модули бота."""
     from .cogs import tickets, verification  # noqa: F401 — регистрируют свои панели
     items: list[tuple[str, str, Callable[[Settings], Payload]]] = [
         ("rules", "rules", rules_payload),
-        ("intake", "intake", intake_payload),
     ]
     for key, channel_key, builder in PANEL_BUILDERS:
         items.append((key, channel_key, builder))
